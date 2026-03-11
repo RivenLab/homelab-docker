@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  broker:
+    image: docker.io/library/redis:8-alpine
+    networks:
+      - paperless_network
+    volumes:
+      - redis_data:/data
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+  db:
+    image: docker.io/library/postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${db_name}
+      POSTGRES_USER: ${db_user}
+      POSTGRES_PASSWORD: ${db_password}
+    networks:
+      - paperless_network
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    networks:
+      - web
+      - paperless_network
+    depends_on:
+      - db
+      - broker
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-S", "--max-time", "2", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - paperless_data:/usr/src/paperless/data
+      - paperless_media:/usr/src/paperless/media
+      - paperless_export:/usr/src/paperless/export
+      - paperless_consume:/usr/src/paperless/consume
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+      PAPERLESS_DBNAME: ${db_name}
+      PAPERLESS_DBUSER: ${db_user}
+      PAPERLESS_DBPASS: ${db_password}
+      USERMAP_UID: 1000
+      USERMAP_GID: 1000
+      PAPERLESS_ADMIN_USER: ${admin_user}
+      PAPERLESS_ADMIN_MAIL: ${admin_mail}
+      PAPERLESS_ADMIN_PASSWORD: ${admin_password}
+      PAPERLESS_SECRET_KEY: ${app_secret}
+      PAPERLESS_URL: https://${app_domain}
+      PAPERLESS_ALLOWED_HOSTS: ${app_domain}
+      PAPERLESS_TIME_ZONE: ${timezone}
+      PAPERLESS_OCR_LANGUAGE: ${ocr_language}
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.paperless.rule=Host(`${app_domain}`)
+        - traefik.http.services.paperless.loadbalancer.server.port=8000
+        - traefik.docker.network=web
+        - traefik.http.routers.paperless.middlewares=limit-paperless
+        - traefik.http.middlewares.limit-paperless.buffering.maxRequestBodyBytes=50000000
+        - traefik.http.middlewares.limit-paperless.buffering.maxResponseBodyBytes=50000000
+        - traefik.http.middlewares.limit-paperless.buffering.memRequestBodyBytes=50000000
+        - traefik.http.middlewares.limit-paperless.buffering.memResponseBodyBytes=50000000
+
+networks:
+  web:
+    external: true
+  paperless_network:
+    driver: overlay
+
+volumes:
+  paperless_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/paperless_data
+
+  paperless_media:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/paperless_media
+
+  paperless_export:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/paperless_export
+
+  paperless_consume:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/paperless_consume
+
+  db_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/db_data
+
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/redis_data
