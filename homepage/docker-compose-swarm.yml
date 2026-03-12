@@ -1,0 +1,41 @@
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    environment:
+      PUID: 1000
+      PGID: 1000
+      HOMEPAGE_ALLOWED_HOSTS: ${app_domain}
+    networks:
+      - web
+    volumes:
+      - config_data:/app/config
+      - icons_data:/app/public/icons
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.homepage.rule=Host(`${app_domain}`)
+        - traefik.http.services.homepage.loadbalancer.server.port=3000
+        - traefik.docker.network=web
+
+networks:
+  web:
+    external: true
+
+volumes:
+  config_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/config
+
+  icons_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/icons
