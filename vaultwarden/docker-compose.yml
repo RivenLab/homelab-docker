@@ -24,8 +24,8 @@ services:
       - TZ=${timezone}
       - SMTP_HOST=${mail_host}
       - SMTP_FROM=${mail_username}
-      - SMTP_FROM_NAME=VaultWarden
-      - SMTP_SECURITY=starttls
+      - SMTP_FROM_NAME=${mail_from}
+      - SMTP_SECURITY=${mail_ssl}
       - SMTP_PORT=${mail_port}
       - SMTP_USERNAME=${mail_username}
       - SMTP_PASSWORD=${mail_password}
