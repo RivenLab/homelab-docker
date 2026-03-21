@@ -1,0 +1,181 @@
+version: "3.8"
+
+services:
+  netbox:
+    image: docker.io/netboxcommunity/netbox:${VERSION-v4.5-4.0.2}
+    env_file: env/netbox.env
+    depends_on:
+      - postgres
+      - redis
+      - redis-cache
+    user: "netbox:root"
+    networks:
+      - web
+      - netbox_network
+    healthcheck:
+      test: curl -f http://localhost:8080/login/ || exit 1
+      start_period: 90s
+      timeout: 3s
+      interval: 15s
+    volumes:
+      - ./configuration:/etc/netbox/config:z,ro
+      - netbox_media:/opt/netbox/netbox/media:rw
+      - netbox_reports:/opt/netbox/netbox/reports:rw
+      - netbox_scripts:/opt/netbox/netbox/scripts:rw
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager     # remove if all data on /mnt/gfs everywhere
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.netbox.rule=Host(`${app_domain}`)
+        - traefik.http.services.netbox.loadbalancer.server.port=8080
+        - traefik.docker.network=web
+
+  netbox_worker:
+    image: docker.io/netboxcommunity/netbox:${VERSION-v4.5-4.0.2}
+    env_file: env/netbox.env
+    user: "netbox:root"
+    networks:
+      - netbox_network
+    depends_on:
+      - netbox
+    command:
+      - /opt/netbox/venv/bin/python
+      - /opt/netbox/netbox/manage.py
+      - rqworker
+    healthcheck:
+      test: ps -aux | grep -v grep | grep -q rqworker || exit 1
+      start_period: 20s
+      timeout: 3s
+      interval: 15s
+    volumes:
+      - ./configuration:/etc/netbox/config:z,ro
+      - netbox_media:/opt/netbox/netbox/media:rw
+      - netbox_reports:/opt/netbox/netbox/reports:rw
+      - netbox_scripts:/opt/netbox/netbox/scripts:rw
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+  postgres:
+    image: docker.io/postgres:18-alpine
+    env_file: env/postgres.env
+    networks:
+      - netbox_network
+    healthcheck:
+      test: pg_isready -q -t 2 -d $$POSTGRES_DB -U $$POSTGRES_USER
+      start_period: 20s
+      timeout: 30s
+      interval: 10s
+      retries: 5
+    volumes:
+      - netbox_postgres:/var/lib/postgresql
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+  redis:
+    image: docker.io/valkey/valkey:9.0-alpine
+    env_file: env/redis.env
+    networks:
+      - netbox_network
+    command:
+      - sh
+      - -c
+      - valkey-server --appendonly yes --requirepass $$REDIS_PASSWORD
+    healthcheck: &redis_healthcheck
+      test: '[ $$(valkey-cli --pass "$${REDIS_PASSWORD}" ping) = ''PONG'' ]'
+      start_period: 5s
+      timeout: 3s
+      interval: 1s
+      retries: 5
+    volumes:
+      - netbox_redis:/data
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+  redis_cache:
+    image: docker.io/valkey/valkey:9.0-alpine
+    env_file: env/redis-cache.env
+    networks:
+      - netbox_network
+    command:
+      - sh
+      - -c
+      - valkey-server --requirepass $$REDIS_PASSWORD
+    healthcheck: *redis_healthcheck
+    volumes:
+      - netbox_redis_cache:/data
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+networks:
+  web:
+    external: true
+  netbox_network:
+    driver: overlay
+
+volumes:
+  netbox_media:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/media
+  netbox_reports:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/reports
+  netbox_scripts:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/scripts
+  netbox_postgres:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/postgres
+  netbox_redis:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/redis
+  netbox_redis_cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/redis-cache
