@@ -1,7 +1,7 @@
 ---
 services:
   ghost:
-    image: ghost:5-alpine
+    image: ghost:6-alpine
     container_name: ghost-cms
     restart: always
     # ports:
@@ -14,6 +14,12 @@ services:
       database__connection__database: ${ghost_db}
       url: https://${app_domain}
       NODE_ENV: production
+      mail__transport: SMTP
+      mail__options__host: ${smtp_host}
+      mail__options__port: ${smtp_port}
+      mail__options__auth__user: ${smtp_user}
+      mail__options__auth__pass: ${smtp_pass}
+      mail__from: ${smtp_mail_from}
     volumes:
       - ${app_data_path}/public_html:/var/lib/ghost/content
       - ${app_data_path}/config/config.production.json:/var/lib/ghost/config.production.json
