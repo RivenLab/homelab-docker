@@ -1,0 +1,124 @@
+version: "3.8"
+
+services:
+  app:
+    image: swarmpit/swarmpit:latest
+    environment:
+      SWARMPIT_DB: http://db:5984
+      SWARMPIT_INFLUXDB: http://influxdb:8086
+    networks:
+      - web
+      - swarmpit_network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.swarmpit.rule=Host(`${app_domain}`)
+        - traefik.http.services.swarmpit.loadbalancer.server.port=8080
+        - traefik.docker.network=web
+
+  db:
+    image: couchdb:2.3.0
+    networks:
+      - swarmpit_network
+    volumes:
+      - db_data:/opt/couchdb/data
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: '0.30'
+          memory: 256M
+        reservations:
+          cpus: '0.15'
+          memory: 128M
+
+  influxdb:
+    image: influxdb:1.8
+    networks:
+      - swarmpit_network
+    volumes:
+      - influx_data:/var/lib/influxdb
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: '0.60'
+          memory: 512M
+        reservations:
+          cpus: '0.30'
+          memory: 128M
+
+  agent:
+    image: swarmpit/agent:latest
+    environment:
+      DOCKER_API_VERSION: 1.44
+    networks:
+      - swarmpit_network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+      labels:
+        swarmpit.agent: 'true'
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+networks:
+  web:
+    external: true
+  swarmpit_network:
+    driver: overlay
+
+volumes:
+  db_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/db
+  influx_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${app_data_path}/influx
