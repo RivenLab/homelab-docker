@@ -1,0 +1,18 @@
+---
+services:
+  trilium:
+    image: triliumnext/trilium:latest
+    restart: unless-stopped
+    networks:
+      - web
+#    ports:
+#      - '8080:8080'
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.trilium.entrypoints=https-internal
+      - traefik.http.routers.trilium.rule=Host(`${app_domain}`)
+      - traefik.http.services.trilium.loadbalancer.server.port=8080
+    volumes:
+      - ${app_data_path}:/home/node/trilium-data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
