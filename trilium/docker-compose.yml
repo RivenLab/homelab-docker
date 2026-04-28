@@ -16,3 +16,7 @@ services:
       - ${app_data_path}:/home/node/trilium-data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+
+networks:
+  web:
+    external: true
