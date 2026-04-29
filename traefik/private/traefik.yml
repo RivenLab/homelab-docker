@@ -1,0 +1,58 @@
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: ERROR
+
+api:
+  dashboard: true
+  insecure: true
+  debug: false
+
+accessLog:
+  filePath: "/logs/traefik.log"
+  format: json
+  filters:
+    statusCodes:
+      - "200-299"
+      - "400-599"
+  bufferingSize: 0
+  fields:
+    headers:
+      defaultMode: drop
+      names:
+        User-Agent: keep
+
+serversTransport:
+  insecureSkipVerify: true
+
+entryPoints:
+  http-internal:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: https-internal
+          scheme: https
+
+  https-internal:
+    address: ":443"
+    forwardedHeaders: {}
+    http:
+      tls:
+        options: default
+        # removed certResolver/cloudflare config
+
+providers:
+  providersThrottleDuration: 2s
+
+  file:
+    watch: true
+    directory: /etc/traefik/conf.d/
+
+  docker:
+    watch: true
+    network: proxy
+    endpoint: "tcp://socket-proxy:2375"
+    exposedByDefault: false

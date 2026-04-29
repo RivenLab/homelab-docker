@@ -1,0 +1,14 @@
+# config.d/certificates.yml
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/fqdn1/fullchain.pem
+      keyFile: /etc/traefik/certs/fqdn1/privkey.pem
+
+#    - certFile: /etc/traefik/certs/fqdn2/fullchain.pem
+#      keyFile: /etc/traefik/certs/fqdn2/privkey.pem
+
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/default/fullchain.pem
+        keyFile: /etc/traefik/certs/default/privkey.pem
