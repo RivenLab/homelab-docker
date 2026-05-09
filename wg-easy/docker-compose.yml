@@ -9,7 +9,7 @@ services:
     networks:
       - internal
     volumes:
-      - /docker/wg:/etc/wireguard
+      - {$app_data_path}:/etc/wireguard
       - /lib/modules:/lib/modules:ro
     ports:
       - "51820:51820/udp"
